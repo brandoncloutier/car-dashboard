@@ -1,118 +1,114 @@
 import asyncio
 import websockets
-import datetime
+import json
+import signal
+import random
 
-# async def hello(websocket):
-#   name = await websocket.recv()
-#   print(f"server received {name}")
-#   greeting = f"hello {name}"
+PORT = 8765
 
-#   await websocket.send(greeting)
-#   print(f"Server Sent: {greeting}")
+connected_clients = dict()        # {websocket -> set of resources}
+resources_watchlist = dict()      # {resource -> set of websockets}
+mock_resources = ["RPM", "SPEED", "COOLANT_TEMP"]
 
-# async def main():
-#   async with websockets.serve(hello, "localhost", 8765):
-#     await asyncio.Future()
-
-# if __name__ == "__main__":
-#   asyncio.run(main())
+rpm_value = 700                   # Starting RPM
+rpm_direction = 1                # 1 means revving up, -1 means revving down
 
 
-# Client 1
-# Client 2
-# Respond: First person -> server record -> send back they are first place 
-# Respond: Second person -> record their time -> how after client 1 responded.
+async def fake_obd_value_generator():
+    global rpm_value, rpm_direction
 
-# winner = None
-# winner_time = None
-# async def button_click(websocket):
-#   now = datetime.datetime.now()
-#   global winner
-#   global winner_time
-#   client_name = await websocket.recv()
-#   print(f"{client_name} clicked the button")
+    while True:
+        await asyncio.sleep(0.05)  # 20 Hz updates for smoothness
 
-#   if not winner:
-#     winner = client_name
-#     winner_time = now
+        # Simulate revving logic
+        if rpm_direction == 1:
+            rpm_value += 100
+            if rpm_value >= 6000:
+                rpm_direction = -1
+        else:
+            rpm_value -= 100
+            if rpm_value <= 700:
+                rpm_direction = 1
 
-#     response = f"{client_name} is first"
-#     await websocket.send(response)
+        # Send mock OBD values
+        for resource, clients in resources_watchlist.items():
+            if not clients:
+                continue
 
-#   else:
-#     time_difference = now - winner_time
-#     response = f"{winner} is the winner. You were slower by {time_difference}"
-#     await websocket.send(response)
-#     winner = None
-#     winner_time = None
+            if resource == "RPM":
+                value = rpm_value
+            elif resource == "SPEED":
+                value = round(random.uniform(0, 80), 1)
+            elif resource == "COOLANT_TEMP":
+                value = round(random.uniform(80, 100), 1)
+            else:
+                continue
 
-# async def main():
-#   async with websockets.serve(button_click, "localhost", 8765):
-#     await asyncio.Future()
+            message = {
+                "type": "obd_value",
+                "resource": resource,
+                "value": value
+            }
+
+            for client in clients.copy():
+                try:
+                    await client.send(json.dumps(message))
+                except Exception as e:
+                    print(f"Error sending to client {client}: {e}")
 
 
-# Empty list to store the connected clients
-# clients = []
-
-# async def handle_message(websocket, path):
-#   # Using global here allows these variables to persist within this function
-#   global clients
-#   global fastest_time
-#   message = await websocket.recv()
-#   if message == "buzz":
-#     response_time = asyncio.get_event_loop().time()
-#     clients.append([websocket, response_time])
-#     if len(clients) == 1:
-#       await websockets.send("First place!")
-#       fastest_time = response_time
-#     else:
-#       t = round(response_time - fastest_time, 2)
-#       await websocket.send(f"Response time: {t} sec slower")
-
-# async def main():
-#    async with websockets.serve(handle_message, "localhost", 8765):
-#      await asyncio.Future()
-
-# if __name__ == "__main__":
-#   asyncio.run(main())
-
-import asyncio
-import websockets
-
-connected_clients = {}
-
-async def echo(websocket, path):
-    # Register new client
-    connected_clients[websocket] = []
-    print(f"Client connected: {websocket.remote_address}, Path: {path}")
+async def watch(websocket):
+    print(f"Client connected: {websocket.remote_address}")
 
     try:
         async for message in websocket:
-            print(f"Received from {websocket.remote_address}: {message}")
+            request = json.loads(message)
+            action = request.get("action")
+            resources = request.get("resources", [])
 
-            # Broadcast to other connected clients
-            for client in list(connected_clients.keys()):
-                if client != websocket and client.open:
-                    await client.send(f"Broadcast from {websocket.remote_address}: {message}")
+            if action == "add":
+                connected_clients.setdefault(websocket, set()).update(resources)
+                for resource in resources:
+                    resources_watchlist.setdefault(resource, set()).add(websocket)
 
-    except websockets.exceptions.ConnectionClosed as e:
-        print(f"Client disconnected: {websocket.remote_address} ({e.code} - {e.reason})")
+            elif action == "del":
+                for resource in resources:
+                    connected_clients[websocket].discard(resource)
+                    if resource in resources_watchlist:
+                        resources_watchlist[resource].discard(websocket)
+                        if not resources_watchlist[resource]:
+                            del resources_watchlist[resource]
 
+            await websocket.send(json.dumps({
+                "type": "acknowledgment",
+                "action": action,
+                "status": "success",
+                "resources": resources,
+                "message": f"Resources {action}ed successfully"
+            }))
+
+    except websockets.exceptions.ConnectionClosed:
+        print(f"Client disconnected: {websocket.remote_address}")
     finally:
-        # Clean up
-        connected_clients.pop(websocket, None)
-        print(f"Connection cleaned up: {websocket.remote_address}")
+        if websocket in connected_clients:
+            for resource in connected_clients[websocket]:
+                if resource in resources_watchlist:
+                    resources_watchlist[resource].discard(websocket)
+                    if not resources_watchlist[resource]:
+                        del resources_watchlist[resource]
+            del connected_clients[websocket]
+
 
 async def main():
-    print("Starting WebSocket server on ws://localhost:8765")
-    async with websockets.serve(
-        echo,
-        "localhost",
-        8765,
-        ping_interval=5,   # Send ping every 5s
-        ping_timeout=5     # Close connection if no pong in 5s
-    ):
-        await asyncio.Future()  # Keep server running
+    print(f"Mock server starting on ws://localhost:{PORT}")
+    server = await websockets.serve(watch, "localhost", PORT, ping_interval=30, ping_timeout=10)
+
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, server.close)
+    loop.add_signal_handler(signal.SIGTERM, server.close)
+
+    await asyncio.gather(server.wait_closed(), fake_obd_value_generator())
+
 
 if __name__ == "__main__":
     asyncio.run(main())
