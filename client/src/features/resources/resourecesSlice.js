@@ -13,7 +13,7 @@ const resourcesSlice = createSlice({
     updateData(state, action) {
       state.resources_data = {
         ...state.resources_data,
-        [action.payload.resource]: action.payload.value
+        [action.payload.resource]: {value: action.payload.value, date: action.payload.date}
       }
     }
   },

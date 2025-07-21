@@ -3,6 +3,7 @@ import asyncio
 import websockets
 import json
 import signal
+import time
 from utils import log, error
 
 PORT = 8765
@@ -21,7 +22,8 @@ async def send_to_client_async(obd_response):
     response_message = {
         "type": "obd_value",
         "resource": resource,
-        "value": value
+        "value": value,
+        "date": int(time.time() * 1000)
     }
 
     websocket_clients = resources_watchlist.get(resource, [])
@@ -124,7 +126,8 @@ async def watch(websocket):
                 "action": action,
                 "status": "success",
                 "resources": resources,
-                "message": f"Resources {action}ed successfully"
+                "message": f"Resources {action}ed successfully",
+                "date": int(time.time() * 1000)
             }
             await websocket.send(json.dumps(response_message))
     except websockets.exceptions.ConnectionClosed:

@@ -38,7 +38,7 @@ export const WebSocketProvider = ({ children }) => {
             [lastJsonMessage.resource]: now
           }
         })
-        dispatch(updateData({ resource: lastJsonMessage.resource, value: lastJsonMessage.value}))
+        dispatch(updateData({ resource: lastJsonMessage.resource, value: lastJsonMessage.value, date: lastJsonMessage.date}))
       }
     } else {
       console.log("NOT OBD VALUE")

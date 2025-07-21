@@ -2,6 +2,7 @@ import asyncio
 import websockets
 import json
 import signal
+import time
 import random
 
 PORT = 8765
@@ -10,44 +11,71 @@ connected_clients = dict()        # {websocket -> set of resources}
 resources_watchlist = dict()      # {resource -> set of websockets}
 mock_resources = ["RPM", "SPEED", "COOLANT_TEMP"]
 
-rpm_value = 700                   # Starting RPM
-rpm_direction = 1                # 1 means revving up, -1 means revving down
+# Store values and direction for each resource
+resource_state = {
+    "RPM": {
+        "value": 0,
+        "direction": 1
+    },
+    "SPEED": {
+        "value": 0,
+        "direction": 1
+    },
+    "COOLANT_TEMP": {
+        "value": 70  # base coolant temperature
+    }
+}
 
 
 async def fake_obd_value_generator():
-    global rpm_value, rpm_direction
-
     while True:
-        await asyncio.sleep(0.05)  # 20 Hz updates for smoothness
+        await asyncio.sleep(0.05)  # 20 Hz update
+        now = int(time.time() * 1000)
 
-        # Simulate revving logic
-        if rpm_direction == 1:
-            rpm_value += 100
-            if rpm_value >= 6000:
-                rpm_direction = -1
+        # --- RPM Simulation: bounce between 0 and 7000 ---
+        rpm = resource_state["RPM"]["value"]
+        rpm += resource_state["RPM"]["direction"] * random.uniform(100, 300)
+        if rpm >= 7000:
+            rpm = 7000
+            resource_state["RPM"]["direction"] = -1
+        elif rpm <= 0:
+            rpm = 0
+            resource_state["RPM"]["direction"] = 1
+        resource_state["RPM"]["value"] = rpm
+
+        # --- SPEED Simulation: bounce between 0 and 160 ---
+        speed = resource_state["SPEED"]["value"]
+        speed += resource_state["SPEED"]["direction"] * random.uniform(1.0, 3.0)
+        if speed >= 160:
+            speed = 160
+            resource_state["SPEED"]["direction"] = -1
+        elif speed <= 0:
+            speed = 0
+            resource_state["SPEED"]["direction"] = 1
+        resource_state["SPEED"]["value"] = speed
+
+        # --- COOLANT TEMP Simulation: stabilize around 90°C ---
+        coolant = resource_state["COOLANT_TEMP"]["value"]
+        if coolant < 90:
+            coolant += random.uniform(0.1, 0.3)
+        elif coolant > 95:
+            coolant -= random.uniform(0.05, 0.2)
         else:
-            rpm_value -= 100
-            if rpm_value <= 700:
-                rpm_direction = 1
+            coolant += random.uniform(-0.05, 0.05)
+        coolant = max(60, min(coolant, 100))
+        resource_state["COOLANT_TEMP"]["value"] = coolant
 
-        # Send mock OBD values
-        for resource, clients in resources_watchlist.items():
+        # --- Broadcast all updates to watching clients ---
+        for resource in mock_resources:
+            clients = resources_watchlist.get(resource, set())
             if not clients:
-                continue
-
-            if resource == "RPM":
-                value = rpm_value
-            elif resource == "SPEED":
-                value = round(random.uniform(0, 80), 1)
-            elif resource == "COOLANT_TEMP":
-                value = round(random.uniform(80, 100), 1)
-            else:
                 continue
 
             message = {
                 "type": "obd_value",
                 "resource": resource,
-                "value": value
+                "value": round(resource_state[resource]["value"], 1),
+                "date": now
             }
 
             for client in clients.copy():
