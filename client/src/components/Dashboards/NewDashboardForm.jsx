@@ -19,7 +19,7 @@ const NewDashboardForm = ({ onClose }) => {
 
       // Getting the newest Dashboard from the state
       const newDashboard = response.payload.dashboard
-      navigate(`./${newDashboard.id}`)
+      navigate(`./dashboard/${newDashboard.id}`)
     } catch (error) {
       setErrorMessage(error.message)
     }

@@ -1,93 +1,168 @@
 import { useParams } from "react-router"
-import { useSelector, useDispatch } from "react-redux"
-import { Menu, Plus, ChevronDown, ChevronRight, X } from "lucide-react";
-import { useState } from "react";
-import { componentMap } from "../../utils/componentsLibrary";
-import { useEditModeContext } from "../../contexts/EditModeContext";
-import FirstDashboardComponetPage from "./FirstDashboardComponentPage";
-import AddFromComponentLibraryForm from "./AddFromComponentLibraryForm";
-import Modal from "../Modal/Modal";
-import { deleteComponentFromDashboard } from "../../features/dashboards/dashboardsSlice";
+import { useSelector } from "react-redux"
+import { useState, useRef, useMemo, useEffect } from "react"
+import { useEditModeContext } from "../../contexts/EditModeContext"
+import { useGridDimensionsContext, GridDimensionsProvider } from "../../contexts/GridDimensionsContext"
+import { DndContext, useSensor, useSensors, MouseSensor, TouchSensor, KeyboardSensor, DragOverlay } from '@dnd-kit/core'
+import { snapToGridRelativeTo, getSnappedPositionRelativeToContainer } from "../../utils/snapToGridHelperFunctions"
+import { addDisplayComponentToDashboard } from "../../features/dashboards/dashboardsSlice"
+import { useDispatch } from "react-redux"
+import { Plus, X } from "lucide-react"
 
-const Header = ({ name }) => {
-  const { editMode } = useEditModeContext()
-  return (
-    <div className={`w-full border-b ${ editMode ? "border-gray-200 dark:border-gray-700" : "border-b-transparent"} flex h-12 items-center justify-between`}>
-      <div className="flex items-center gap-2">
-        <div className='text-lg'>{name}</div>
-      </div>
-    </div>
-  )
-}
+import MenuWidgetDraggable from "./MenuWidgetDraggable"
+import PresentationalComponent from "./PresentationalComponent"
+import DisplayComponent from "./DisplayComponent"
+import { categorizedResourceComponentLibrary } from "../../utils/resourceComponentsLibrary"
+import displayComponentsMenuLibrary from "../../utils/displayComponentsMenuLibrary"
+import { createPortal } from "react-dom"
 
 const Dashboard = () => {
   const { id } = useParams()
-
-  const dashboard = useSelector(state => state.dashboards.dashboards.find((dashboard) => dashboard.id === id))
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const dashboard = useSelector(state => state.dashboards.dashboards.find(d => d.id === id))
+  const { editMode } = useEditModeContext()
 
   if (!dashboard) return <div>No Dashboard Exists</div>
 
   return (
     <div className="flex flex-col h-full w-full">
-      <Header name={dashboard.name} />
-      {dashboard.grid.length > 0 ? <DashboardGrid grid={dashboard.grid} dashboardId={dashboard.id}/> : <FirstDashboardComponetPage dashboardId={dashboard.id} />}
+      <GridDimensionsProvider>
+        <DashboardGrid grid={dashboard.grid} dashboardId={dashboard.id} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
+      </GridDimensionsProvider>
+      {editMode ? createPortal(<Plus className='w-full h-full border-2 border-black dark:border-white rounded hover:bg-gray-200 hover:dark:bg-gray-700 hover:cursor-pointer' onClick={() => setIsMenuOpen(true)}/>, document.getElementById("sidebar-add-button-root")) : null}
     </div>
   )
 }
 
-const DashboardGrid = ({ dashboardId, grid }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const { editMode } = useEditModeContext()
-
-  const handleClick = () => {
-    setIsModalOpen(true)
-  }
-  return (
-    <div className={`flex flex-col divide-y ${editMode ? "divide-gray-200 dark:divide-gray-700" : "divide-transparent"} grow`}>
-      {grid.map((row, index) => <DashboardGridRow row={row} key={index} dashboardId={dashboardId} gridRowIndex={index}/>)}
-      {editMode ? <button className="flex justify-center h-[30px] items-center hover:cursor-pointer hover:bg-gray-200 hover:dark:bg-gray-700 shrink-0" onClick={handleClick}><ChevronDown/></button> : null}
-
-      <Modal isModalOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg" title="Component Library">
-        <AddFromComponentLibraryForm onClose={() => setIsModalOpen(false)} dashboardId={dashboardId} gridRowIndex={grid.length}/>
-      </Modal>
-    </div>
-  )
-}
-
-const DashboardGridRow = ({ dashboardId, row, gridRowIndex }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const { editMode } = useEditModeContext()
-
-  const handleClick = () => {
-    setIsModalOpen(true)
-  }
-
-  return (
-    <div className="h-full flex">
-      <div className={`grid [grid-template-columns:repeat(auto-fit,minmax(0,1fr))] divide-x h-full grow ${editMode ? "border-r border-r-gray-200 dark:border-r-gray-700 divide-gray-200 dark:divide-gray-700" : "divide-transparent"}`}>
-        {row.map((componentId, index) => <DashboardComponent componentId={componentId} key={index} gridRowIndex={gridRowIndex} gridColIndex={index} dashboardId={dashboardId}/>)}
-      </div>
-      {editMode ? <button className="flex justify-center w-[30px] items-center hover:cursor-pointer hover:bg-gray-200 hover:dark:bg-gray-700 shrink-0" onClick={handleClick}><ChevronRight /></button> : null}
-
-      <Modal isModalOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg" title="Component Library">
-        <AddFromComponentLibraryForm onClose={() => setIsModalOpen(false)} dashboardId={dashboardId} gridRowIndex={gridRowIndex}/>
-      </Modal>
-    </div>
-  )
-}
-
-const DashboardComponent = ({ dashboardId, componentId, gridRowIndex, gridColIndex }) => {
-  const { editMode } = useEditModeContext()
+const DashboardGrid = ({ dashboardId, isMenuOpen, setIsMenuOpen }) => {
+  const [activeId, setActiveId] = useState(null)
+  const containerRef = useRef(null)
+  const nodeRefs = useRef(new Map())
+  const [dragOriginRect, setDragOriginRect] = useState(null)
+  const components = useSelector(state => state.dashboards.dashboards.find(dashboard => dashboard.id === dashboardId).components)
+  const { editMode, setEditMode } = useEditModeContext()
+  const { bestGridCellLayout } = useGridDimensionsContext()
   const dispatch = useDispatch()
 
-  const handleDelete = () => {
-    dispatch(deleteComponentFromDashboard({ dashboardId, gridRowIndex, gridColIndex }))
-    console.log("deleting:" + gridRowIndex + " : " + gridColIndex)
+  const mouseSensor = useSensor(MouseSensor)
+  const touchSensor = useSensor(TouchSensor)
+  const keyboardSensor = useSensor(KeyboardSensor)
+  const sensors = useSensors(mouseSensor, touchSensor, keyboardSensor)
+
+  useEffect(() => {
+    if (Object.keys(components).length === 0) {
+      setIsMenuOpen(true)
+      setEditMode(true)
+    } else {
+      setIsMenuOpen(false)
+    }
+  }, [dashboardId, components])
+
+  const snapToGridModifier = useMemo(() => (
+    snapToGridRelativeTo(
+      containerRef,
+      dragOriginRect,
+      bestGridCellLayout?.cellWidth ?? 1,
+      bestGridCellLayout?.cellHeight ?? 1
+    )
+  ), [containerRef, dragOriginRect, bestGridCellLayout?.cellWidth, bestGridCellLayout?.cellHeight])
+
+  if (!bestGridCellLayout) return null
+
+  const handleOnDragEnd = ({ delta, active }) => {
+    const snapped = getSnappedPositionRelativeToContainer(
+      containerRef,
+      dragOriginRect,
+      bestGridCellLayout.cellWidth,
+      bestGridCellLayout.cellHeight,
+      delta.x,
+      delta.y
+    )
+    if (!snapped) return
+    const { x, y } = snapped
+    addComponent(active.id, x, y)
+    setActiveId(null)
   }
+
+  const addComponent = (componentReferenceId, positionX, positionY) => {
+    const newId = crypto.randomUUID()
+
+    dispatch(addDisplayComponentToDashboard({ dashboardId, newId, componentReferenceId, positionX, positionY }))
+  }
+
+  const handleOnDragStart = ({ active }) => {
+    setIsMenuOpen(false)
+    setActiveId(active.id)
+    const node = nodeRefs.current.get(active.id)?.current
+    setDragOriginRect(node ? node.getBoundingClientRect() : null)
+  }
+
   return (
-    <div className="relative">
-    {componentMap[componentId]}
-    {editMode ? <button className="absolute top-2 right-2 bg-red-600 rounded-full hover:cursor-pointer p-[2px]" onClick={handleDelete}><X className="w-4 h-4"/></button> : null}
+    <DndContext sensors={sensors} onDragEnd={handleOnDragEnd} onDragStart={handleOnDragStart}>
+      <Grid ref={containerRef} components={components} activeId={activeId} dashboardId={dashboardId} />
+      <ComponentMenu nodeRefs={nodeRefs} isMenuOpen={isMenuOpen} setIsMenuOpen={setIsMenuOpen} />
+
+      <DragOverlay modifiers={[snapToGridModifier]} dropAnimation={null} style={{ zIndex: 1 }}>
+        {activeId && <PresentationalComponent id={activeId} />}
+      </DragOverlay>
+    </DndContext>
+  )
+}
+
+const Grid = ({ ref, components, activeId, dashboardId }) => {
+  const { bestGridCellLayout } = useGridDimensionsContext()
+
+  useEffect(() => {
+  }, [bestGridCellLayout])
+
+  if (!bestGridCellLayout) return null
+
+  return (
+    <div
+      ref={ref}
+      className="w-full h-full absolute"
+      style={activeId ? {
+        backgroundSize: `${bestGridCellLayout.cellWidth}px ${bestGridCellLayout.cellHeight}px`,
+        backgroundImage: `
+          linear-gradient(to right, #4B5563 1px, transparent 1px),
+          linear-gradient(to bottom, #4B5563 1px, transparent 1px)
+        `
+      } : null}
+    >
+      {Object.entries(components).map(([id, componentData]) => (
+        <DisplayComponent key={id} id={id} componentData={componentData} dashboardId={dashboardId} />
+      ))}
+    </div>
+  )
+}
+
+const ComponentMenu = ({ nodeRefs, isMenuOpen, setIsMenuOpen }) => {
+  const { editMode } = useEditModeContext()
+
+  return (
+    <div className={`text-black w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-xl border ${isMenuOpen && editMode ? "z-[1]" : "z-[-9999]"}`}>
+      <div className="flex items-center justify-between p-6 border-b">
+        <h2 id="modal-title" className="text-lg font-semibold">
+          Component Library
+        </h2>
+        <button variant="ghost" size="sm" onClick={() => setIsMenuOpen(false)} className="ml-auto h-8 w-8 p-0 hover:cursor-pointer" aria-label="Close modal">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 max-h-[70vh]">
+        <ul className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {Object.entries(displayComponentsMenuLibrary).map(([id, component]) => (
+            <li key={id} className="flex flex-col items-center">
+              <div className="mb-2 text-sm font-medium text-gray-700 capitalize">
+                {component.name}
+              </div>
+              <MenuWidgetDraggable id={id} nodeRefs={nodeRefs} />
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   )
 }

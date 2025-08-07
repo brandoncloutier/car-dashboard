@@ -9,6 +9,7 @@ export const EditModeProvider = ({ children }) => {
 
   const value = {
     editMode,
+    setEditMode,
     handleEditModeToggle
   }
   return (

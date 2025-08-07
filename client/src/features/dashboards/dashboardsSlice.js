@@ -54,7 +54,7 @@ const dashboardsSlice = createSlice({
       const newDashboardsState = state.dashboards.concat({
         id: action.payload.id,
         name: action.payload.dashboardName,
-        grid: []
+        components: {}
       })
       state.dashboards = newDashboardsState
 
@@ -68,52 +68,65 @@ const dashboardsSlice = createSlice({
       localStorage.setItem("dashboardsState", JSON.stringify(newDashboardsState))
       return
     },
-    addComponentToDashboard(state, action) {
-      const { dashboardId, gridRowIndex, chosenComponentId } = action.payload;
-      const targetDashboard = state.dashboards.find((dashboard) => dashboard.id === dashboardId);
+    addDisplayComponentToDashboard(state, action) {
+      const { dashboardId, newId, componentReferenceId, positionX, positionY } = action.payload;
 
-      if (!targetDashboard) return;
+      // Find the target dashboard
+      const dashboard = state.dashboards.find(d => d.id === dashboardId);
+      if (!dashboard) return;
 
-      // Make a deep copy of the grid
-      const targetGridCopy = targetDashboard.grid.map(row => [...row]);
+      // Create a new component entry
+      const newDisplayComponent = {
+        id: newId,
+        referenceId: componentReferenceId,
+        resourceComponentId: null,
+        position: {
+          x: positionX,
+          y: positionY
+        }
+      };
 
-      // Ensure enough rows exist
-      while (targetGridCopy.length <= gridRowIndex) {
-        targetGridCopy.push([]);
-      }
-
-      // Add component to the specified row
-      targetGridCopy[gridRowIndex].push(chosenComponentId);
-
-      // Update dashboard's grid
-      targetDashboard.grid = targetGridCopy;
+      // Add the new component to the components map
+      dashboard.components[newId] = newDisplayComponent;
 
       // Persist the new dashboards state
       localStorage.setItem("dashboardsState", JSON.stringify(state.dashboards));
     },
-    deleteComponentFromDashboard(state, action) {
-      const { dashboardId, gridRowIndex, gridColIndex } = action.payload;
+    deleteDisplayComponentFromDashboard(state, action) {
+      const { dashboardId, componentId } = action.payload;
 
-      const targetDashboard = state.dashboards.find(d => d.id === dashboardId);
-      if (!targetDashboard || !targetDashboard.grid[gridRowIndex]) return;
+      // Find the target dashboard
+      const dashboard = state.dashboards.find(d => d.id === dashboardId);
+      if (!dashboard) return;
 
-      const updatedGrid = [...targetDashboard.grid];
-      const updatedRow = [...updatedGrid[gridRowIndex]];
-      updatedRow.splice(gridColIndex, 1);
-      if (updatedRow.length <= 0) {
-        updatedGrid.splice(gridRowIndex, 1)
-      } else {
-        updatedGrid[gridRowIndex] = updatedRow;
-      }
-      targetDashboard.grid = updatedGrid;
+      // Delete the component from the components map
+      delete dashboard.components[componentId];
 
+      // Persist the new dashboards state
+      localStorage.setItem("dashboardsState", JSON.stringify(state.dashboards));
+    },
+    setResourceComponentForDisplayComponent(state, action) {
+      const { dashboardId, componentId, resourceComponentId } = action.payload;
+
+      // Find the target dashboard
+      const dashboard = state.dashboards.find(d => d.id === dashboardId);
+      if (!dashboard) return;
+
+      // Find the target component
+      const component = dashboard.components[componentId];
+      if (!component) return;
+
+      // Update the resourceComponentId
+      component.resourceComponentId = resourceComponentId;
+
+      // Persist the new dashboards state
       localStorage.setItem("dashboardsState", JSON.stringify(state.dashboards));
     }
   },
   extraReducers(builder) { }
 })
 
-export const { createDashboard, deleteDashboard, addComponentToDashboard, deleteComponentFromDashboard } = dashboardsSlice.actions
+export const { createDashboard, deleteDashboard, addDisplayComponentToDashboard, deleteDisplayComponentFromDashboard, setResourceComponentForDisplayComponent } = dashboardsSlice.actions
 
 export default dashboardsSlice.reducer
 

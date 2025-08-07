@@ -18,18 +18,20 @@ const DashboardWidget = ({ dashboard }) => {
   }
   return (
     <div className="relative">
-      <Link className="hover:cursor-pointer" to={`./${dashboard.id}`}>
+      <Link className="hover:cursor-pointer" to={`./dashboard/${dashboard.id}`}>
         <div className="p-3 border border-gray-200 dark:border-gray-700 rounded-md flex flex-col space-y-2 h-[175px] relative">
           <div className="grow rounded-md flex justify-center items-center bg-gray-200 dark:bg-gray-700">
             <LayoutDashboard className="h-8 w-8" />
           </div>
-          <span className="shrink-0 text-sm font-medium text-muted-foreground/80 uppercase tracking-wider mb-0">{dashboard.name}</span>
+          <div className="flex justify-between items-center shrink-0">
+            <span className="text-sm font-medium text-muted-foreground/80 uppercase tracking-wider mb-0 truncate">{dashboard.name}</span>
+            {editMode ? <button className="bg-red-600 rounded hover:cursor-pointer px-[4px] text-sm text-white" onClick={handleExitClick}>Delete</button> : null}
+          </div>
         </div>
       </Link>
-      {editMode ? <button className="absolute top-[-13px] right-[-13px] bg-red-600 rounded-full hover:cursor-pointer p-[2px]" onClick={handleExitClick}><X className="h-6 w-6 text-white" /></button> : null}
 
-      <Modal isModalOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="sm" title="Delete Dashboard">
-        <ConfirmDeleteButtons onClose={() => setIsModalOpen(false)} dashboardId={dashboard.id}/>
+      <Modal isModalOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="sm" title={`Delete ${dashboard.name.toUpperCase()} Dashboard`}>
+        <ConfirmDeleteButtons onClose={() => setIsModalOpen(false)} dashboardId={dashboard.id} />
       </Modal>
     </div>
   )

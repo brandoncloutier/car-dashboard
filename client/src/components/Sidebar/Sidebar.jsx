@@ -7,6 +7,7 @@ import SimpleToggle from "../ui/SimpleToggle";
 import { useLocation, Link } from "react-router";
 import { useEditModeContext } from "../../contexts/EditModeContext";
 import { SquarePen } from "lucide-react";
+import { useSelector } from "react-redux";
 
 const Sidebar = () => {
   const { isSidebarOpen, handleSidebarToggle } = useSidebarContext()
@@ -14,8 +15,13 @@ const Sidebar = () => {
   const { editMode, handleEditModeToggle } = useEditModeContext()
   const location = useLocation()
 
+  const dashboards = useSelector((state) => state.dashboards.dashboards)
+
+  const { pathname } = location
+  const urlPathSegments = pathname.replace(/^\/+|\/+$/g, "").split("/")
+
   return (
-    <div className={`w-18 h-full overflow-hidden text-nowrap shrink-0 z-[1000]`}>
+    <div className={`w-18 h-full overflow-hidden text-nowrap shrink-0 bg-[#f9f9f9] dark:bg-[#121212]`}>
       <div className="p-2 flex flex-col h-full justify-between items-center">
         {/* Top Buttons */}
         <div className="flex flex-col gap-2">
@@ -24,8 +30,22 @@ const Sidebar = () => {
           </ul>
         </div>
 
+        {
+          (urlPathSegments[0] === "dashboard" && dashboards.length > 1 )&&
+          <div className="flex flex-col gap-4">
+            {dashboards.map(dashboard => {
+              return (
+                <Link to={`./dashboard/${dashboard.id}`} key={dashboard.id} className="flex items-center justify-center rounded-lg w-[30px] h-[30px] hover:bg-gray-200 hover:dark:bg-gray-700 hover:cursor-pointer">
+                  <div className={`bg-gray-700 dark:bg-white ${urlPathSegments[1] === dashboard.id ? "w-[24px] h-[24px]" : "w-[14px] h-[14px]"} rounded-full`}></div>
+                </Link>
+              )
+            })}
+          </div>
+         }
+
         {/* Bottom Buttons */}
         <div className="flex flex-col gap-4 items-center mb-2">
+          <div className="w-[30px] h-[30px]" id="sidebar-add-button-root"></div>
           <SquarePen onClick={handleEditModeToggle} className={`w-[30px] h-[30px] hover:cursor-pointer ${editMode ? "text-green-500" : ""}`} />
           <DarkModeSwitch
             checked={dark}
