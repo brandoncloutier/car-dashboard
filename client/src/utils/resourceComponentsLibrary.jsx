@@ -5,6 +5,7 @@ import RPMChartComponent from "../components/ComponentLibrary/Engine/RPMChartCom
 import FuelComponentLinear from "../components/ComponentLibrary/Engine/FuelComponentLinear";
 import FuelComponentRadial from "../components/ComponentLibrary/Engine/FuelComponentRadial";
 import CoolantTempComponentRadial from "../components/ComponentLibrary/Engine/CoolantTempComponentRadial";
+import NavigationMapFull from "../components/ComponentLibrary/Navigation/NavigationMapFull";
 
 export const resourceComponentLibrary = [
   { id: "engine/speed/speedometer", category: "engine", name: "Speed", resource: "SPEED", component: <SpeedComponent resource={"SPEED"}/> },
@@ -14,7 +15,7 @@ export const resourceComponentLibrary = [
   { id: "engine/fuelLevel/lineargauge", category: "engine", name: "Fuel Level Linear", resource: "FUEL_LEVEL", component: <FuelComponentLinear resource={"FUEL_LEVEL"}/>},
   { id: "engine/fuelLevel/radialguage", category: "engine", name: "Fuel Level Radial", resource: "FUEL_LEVEL", component: <FuelComponentRadial resource={"FUEL_LEVEL"}/>},
   { id: "engine/coolantTemp/radialguage", category: "engine", name: "Coolant Temp Radial", resource: "COOLANT_TEMP", component: <CoolantTempComponentRadial resource={"COOLANT_TEMP"}/>},
-  { id: "media/player", category: "media", name: "Media Player", resource: "", component: <div>Media Player</div> },
+  { id: "navigation/map/full", category: "navigation", name: "Navigation Map", resource: null, component: <NavigationMapFull />},
 ]
 
 export const categorizedResourceComponentLibrary = resourceComponentLibrary.reduce((acc, item) => {
