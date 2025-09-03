@@ -173,7 +173,7 @@ const ResourceComponentsMenu = ({ dashboardId, componentId, onClose }) => {
 const ResourceComponent = ({ resourceComponentId }) => {
   const { editMode } = useEditModeContext()
   return (
-    <div className={`relative h-full w-full rounded ${editMode ? "border-1" : null}`}>{resourceComponentMap[resourceComponentId]}</div>
+    <div className={`relative h-full w-full rounded overflow-hidden ${editMode ? "border-1" : null}`}>{resourceComponentMap[resourceComponentId]}</div>
   )
 }
 

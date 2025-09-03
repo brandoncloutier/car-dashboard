@@ -67,3 +67,12 @@ img, picture, video, canvas, svg {
   max-width: 100%;
   display: block;
 }
+
+.user-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: white;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.9); /* ring */
+  position: relative;
+}
