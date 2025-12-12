@@ -12,7 +12,7 @@ import ConfirmDestination from "./ConfirmDestination";
 import Directions from "./Directions";
 
 const NavigationMapFull = () => {
-  const INITIAL_ZOOM = 17.5
+  const INITIAL_ZOOM = 17
   const [currentLocation, setCurrentLocation] = useState(null)
   const [currentLocationLoaded, setCurrentLocationLoaded] = useState(false)
   const [isMapLoaded, setIsMapLoaded] = useState(false)

@@ -76,7 +76,6 @@ The system follows a **hybrid client-server model**:
 
 ![dashboard screenshot 2](/github-images/cardashboard2.png)
 
-<video src="/github-images/cardashboarddemo.mp4" width="320" height="240" controls></video>
 ---
 
 ## 🧑‍💻 Author
